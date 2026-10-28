@@ -1,0 +1,98 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Emergency GPS Sharing</title>
+</head>
+<body>
+  <h2>ESP32 Emergency GPS</h2>
+  <p id="status">Tap Start and allow location access.</p>
+  <button id="start">Start Location Sharing</button>
+  <button id="stop" disabled>Stop Sharing</button>
+
+  <script type="module">
+    import { initializeApp } from
+      "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
+    import { getAuth, signInAnonymously } from
+      "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
+    import { getDatabase, ref, set } from
+      "https://www.gstatic.com/firebasejs/11.10.0/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyDuq9IKvCbszhQS8-AFvf9z0M97J4Dv8cE",
+      authDomain: "emergency-alert-f8f83.firebaseapp.com",
+      databaseURL: "https://emergency-alert-f8f83-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "emergency-alert-f8f83",
+      appId: "1:370631483233:web:bc54251b4d02bf91216f20"
+    };
+
+    const statusText = document.getElementById("status");
+    const startButton = document.getElementById("start");
+    const stopButton = document.getElementById("stop");
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getDatabase(app);
+
+    let watchId = null;
+
+    startButton.addEventListener("click", async () => {
+      try {
+        startButton.disabled = true;
+        statusText.textContent = "Signing in to Firebase...";
+
+        await signInAnonymously(auth);
+
+        if (!navigator.geolocation) {
+          throw new Error("Geolocation is not supported by this browser.");
+        }
+
+        statusText.textContent = "Requesting phone GPS permission...";
+
+        watchId = navigator.geolocation.watchPosition(async (position) => {
+          try {
+            const data = {
+              lat: position.coords.latitude,
+              lon: position.coords.longitude,
+              accuracy: position.coords.accuracy,
+              updatedAt: Date.now()
+            };
+
+            await set(ref(db, "location"), data);
+
+            statusText.textContent =
+              `Location updated! Accuracy: ±${Math.round(data.accuracy)} metres.`;
+            stopButton.disabled = false;
+          } catch (error) {
+            statusText.textContent = "Firebase error: " + error.message;
+          }
+        }, (error) => {
+          statusText.textContent = "GPS error: " + error.message;
+          startButton.disabled = false;
+        }, {
+          enableHighAccuracy: true,
+          maximumAge: 5000,
+          timeout: 20000
+        });
+
+        stopButton.disabled = false;
+      } catch (error) {
+        statusText.textContent = "Setup error: " + error.message;
+        startButton.disabled = false;
+      }
+    });
+
+    stopButton.addEventListener("click", () => {
+      if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId);
+        watchId = null;
+      }
+      statusText.textContent = "Location sharing stopped.";
+      startButton.disabled = false;
+      stopButton.disabled = true;
+    });
+  </script>
+</body>
+</html>
